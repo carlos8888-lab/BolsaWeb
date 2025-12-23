@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Posts{% endblock %}
+{% block content %}
+<h2>Posts</h2>
+
+<form method="POST">
+  {{ form.hidden_tag() }}
+  <div>
+    <label>Título</label><br/>
+    {{ form.title(size=60) }}
+  </div>
+  <div style="margin-top:8px;">
+    <label>Contenido</label><br/>
+    {{ form.body(rows=6, cols=60) }}
+  </div>
+  <button style="margin-top:12px;" type="submit">Publicar</button>
+</form>
+
+<hr style="margin:24px 0;"/>
+
+{% for p in posts %}
+  <article style="padding:12px;border:1px solid #ddd;margin-bottom:12px;">
+    <h3 style="margin:0 0 8px 0;">{{ p.title }}</h3>
+    <div style="white-space:pre-wrap;">{{ p.body }}</div>
+    <small>Autor ID: {{ p.user_id }} · {{ p.created_at }}</small>
+  </article>
+{% else %}
+  <p>No hay posts todavía.</p>
+{% endfor %}
+
+<p><a href="{{ url_for('dashboard') }}">Volver</a></p>
+{% endblock %}

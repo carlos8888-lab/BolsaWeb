@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Juego{% endblock %}</title>
+</head>
+<body>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div style="max-width:720px;margin:16px auto;padding:12px;border:1px solid #ddd;">
+        {% for m in messages %}<div>{{ m }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main style="max-width:720px;margin:0 auto;padding:16px;">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
