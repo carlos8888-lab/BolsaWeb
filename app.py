@@ -117,13 +117,12 @@ def load_secret_key() -> str:
     2) Variable de entorno SECRET_KEY -> ideal para Replit/producción
     3) Si no hay nada -> error (no se debe arrancar sin SECRET_KEY)
     """
-    # 1) Ruta configurable por variable de entorno (por si cambias de PC)
-    secret_file = os.environ.get("SECRET_KEY_FILE")
-
-    # Si no está definida, intenta una ruta por defecto en el HOME del usuario
-    if not secret_file:
-        secret_file = str(r"D:\programacion\no copiar\bolsaweb.key")
-
+            # 2) Fallback a entorno (Replit)
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    # 1) Intentar leer archivo local
+    secret_file = str(r"D:\programacion\no copiar\bolsaweb.key")
     try:
         p = Path(secret_file)
         if p.exists():
@@ -131,18 +130,10 @@ def load_secret_key() -> str:
             if key:
                 return key
     except Exception:
-        # Si falla leer el archivo, seguimos al fallback del entorno
-        pass
-
-    # 2) Fallback a entorno (Replit)
-    key = os.environ.get("SECRET_KEY")
-    if key:
-        return key
-
-    # 3) No arrancar sin clave
-    raise RuntimeError(
-        "Falta SECRET_KEY. Define SECRET_KEY (Replit Secrets) o crea el archivo de clave local."
-    )
+        # 3) No arrancar sin clave
+        raise RuntimeError(
+            "Falta SECRET_KEY. Define SECRET_KEY (Replit Secrets) o crea el archivo de clave local."
+        )
 
 app = create_app()
 
