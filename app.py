@@ -13,6 +13,7 @@ import yfinance as yf
 import matplotlib
 matplotlib.use("Agg")  # servidor sin UI
 import matplotlib.pyplot as plt
+import os
 
 from flask import (
     Flask,
@@ -568,7 +569,7 @@ class ServicioGraficas:
 # App Flask
 # =========================
 
-def crear_app() -> Flask:
+def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = CLAVE_SESION
 
@@ -932,8 +933,8 @@ def crear_app() -> Flask:
 # if __name__ == "__main__":
 #     app = crear_app()
 #     app.run(debug=True)
+app = create_app()
 if __name__ == "__main__":
-    import os
     puerto = int(os.environ.get("PORT", "5000"))
-    app = crear_app()
+
     app.run(host="0.0.0.0", port=puerto, debug=True)
