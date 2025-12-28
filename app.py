@@ -610,8 +610,18 @@ def create_app() -> Flask:
     # Rutas: páginas
     # =========================
 
+    # @app.get("/")
+    # def index():
+    #     uid = usuario_id_actual()
+    #     if uid is None:
+    #         return redirect(url_for("login"))
+    #     return redirect(url_for("valores"))
     @app.get("/")
-    def index():
+    def health_root():
+        return "OK", 200
+
+    @app.get("/app")
+    def app_home():
         uid = usuario_id_actual()
         if uid is None:
             return redirect(url_for("login"))
