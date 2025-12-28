@@ -391,7 +391,8 @@ class ServicioMercado:
                 intervalo = periodo[2]
 
                 t = yf.Ticker(tick + ".MC")
-                df = t.history(period=yf_period, interval=intervalo)
+                # df = t.history(period=yf_period, interval=intervalo)
+                df = None#QUITAR
                 if df is None or df.empty:
                     continue
                 resultados[tick][clave_periodo] = df.sort_index().copy()
