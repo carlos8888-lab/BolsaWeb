@@ -392,7 +392,7 @@ class ServicioMercado:
 
                 t = yf.Ticker(tick + ".MC")
                 # df = t.history(period=yf_period, interval=intervalo)
-                df = None#QUITAR
+                df = None
                 if df is None or df.empty:
                     continue
                 resultados[tick][clave_periodo] = df.sort_index().copy()
@@ -595,12 +595,13 @@ def create_app() -> Flask:
         tickers_db = repo.leer_tickers(conn)
         if existe_archivo(RUTA_RESULTADOS):
             datos = mercado.cargar_datos_desde_disco()
-            tickers_en_cache = set(datos.keys())
-            tickers_db_set = set([t for _, t in tickers_db])
-            if tickers_db_set != tickers_en_cache:
-                datos = mercado.descargar_datos_tickers(tickers_db)
-                mercado.guardar_datos_en_disco(datos)
-            return datos
+            if datos:
+                tickers_en_cache = set(datos.keys())
+                tickers_db_set = set([t for _, t in tickers_db])
+                if tickers_db_set != tickers_en_cache:
+                    datos = mercado.descargar_datos_tickers(tickers_db)
+                    mercado.guardar_datos_en_disco(datos)
+                return datos
         datos = mercado.descargar_datos_tickers(tickers_db)
         mercado.guardar_datos_en_disco(datos)
         return datos
