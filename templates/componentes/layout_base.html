@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ titulo if titulo else "App Valores" }}</title>
+  {% include "estilos/base_css.html" %}
+  {% block meta_extra %}{% endblock %}
+</head>
+<body>
+  <div class="contenedor">
+    {% include "componentes/barra_nav.html" %}
+    <main class="contenido">
+      {% include "componentes/mensajes.html" %}
+      {% block contenido %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

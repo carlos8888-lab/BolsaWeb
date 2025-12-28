@@ -1,0 +1,9 @@
+{% extends "componentes/layout_base.html" %}
+{% set titulo = "Inicio" %}
+
+{% block contenido %}
+  <section class="tarjeta">
+    <h1>Inicio</h1>
+    <p><a class="btn btn--principal" href="{{ url_for('valores') }}">Ir a Valores</a></p>
+  </section>
+{% endblock %}

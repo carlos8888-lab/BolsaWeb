@@ -1,0 +1,14 @@
+{% extends "componentes/layout_base.html" %}
+{% set titulo = "Instrucciones" %}
+
+{% block contenido %}
+  <section class="tarjeta">
+    <h1>Instrucciones</h1>
+    <ul>
+      <li>La pantalla <b>Valores</b> se refresca sola con meta-refresh (sin JavaScript).</li>
+      <li><b>Comprar/Vender</b> usa precio en tiempo real con yfinance (último Close del día).</li>
+      <li><b>TP/SL</b> se guarda en la compra activa más reciente sin fecha de venta.</li>
+      <li>La <b>auto-venta</b> se revisa al entrar en la pantalla de Valores (y al refrescar).</li>
+    </ul>
+  </section>
+{% endblock %}

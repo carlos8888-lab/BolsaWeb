@@ -1,0 +1,20 @@
+<section class="cabecera">
+  <div class="cabecera__bloque">
+    <div class="cabecera__titulo">Usuario</div>
+    <div class="cabecera__valor">{{ usuario_nombre }}</div>
+  </div>
+
+  <div class="cabecera__bloque">
+    <div class="cabecera__titulo">Saldo</div>
+    <div class="cabecera__valor">{{ "%.2f"|format(saldo) }} €</div>
+  </div>
+
+  <div class="cabecera__bloque">
+    <div class="cabecera__titulo">Refresco</div>
+    <div class="cabecera__valor">{{ refresco_seg }}s</div>
+  </div>
+
+  <div class="cabecera__nota muted">
+    * Sin JavaScript: refresco automático por meta-refresh.
+  </div>
+</section>

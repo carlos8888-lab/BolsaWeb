@@ -1,0 +1,12 @@
+{% extends "componentes/layout_base.html" %}
+{% set titulo = "Valores" %}
+
+{% block meta_extra %}
+  <meta http-equiv="refresh" content="{{ refresco_seg }}">
+{% endblock %}
+
+{% block contenido %}
+  {% include "componentes/cabecera_usuario.html" %}
+  {% include "componentes/selector_periodo.html" %}
+  {% include "componentes/lista_tickers.html" %}
+{% endblock %}

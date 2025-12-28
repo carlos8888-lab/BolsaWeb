@@ -1,0 +1,77 @@
+<div class="tabla__fila">
+  <div class="celda">
+    <div class="empresa">{{ r.empresa }}</div>
+    <div class="muted">{{ r.ticker }}</div>
+  </div>
+
+  <div class="celda">
+    <img
+      class="mini"
+      alt="mini-grafica {{ r.ticker }}"
+      src="{{ url_for('mini_grafica', ticker=r.ticker, periodo=periodo, puntos=60) }}"
+    >
+  </div>
+
+  <div class="celda">
+    {% if r.precio_actual is none %}
+      <span class="muted">--</span>
+    {% else %}
+      {{ "%.3f"|format(r.precio_actual) }}
+    {% endif %}
+  </div>
+
+  <div class="celda">
+    {{ r.acciones }}
+  </div>
+
+  <div class="celda">
+    {% if r.beneficio is none %}
+      <span class="muted">--</span>
+    {% else %}
+      <span class="{% if r.beneficio > 0 %}pnl pnl--pos{% elif r.beneficio < 0 %}pnl pnl--neg{% else %}pnl{% endif %}">
+        {{ (r.beneficio)|round(2) }} €
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="celda">
+    {% if r.tp is none and r.sl is none %}
+      <span class="muted">—</span>
+    {% else %}
+      <div class="muted">
+        TP: {{ r.tp if r.tp is not none else "--" }}<br>
+        SL: {{ r.sl if r.sl is not none else "--" }}
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('operar_guardar_auto') }}" class="form form--mini">
+      <input type="hidden" name="ticker" value="{{ r.ticker }}">
+      <input type="hidden" name="periodo" value="{{ periodo }}">
+      <input name="tp" placeholder="TP" value="{{ r.tp if r.tp is not none else '' }}">
+      <input name="sl" placeholder="SL" value="{{ r.sl if r.sl is not none else '' }}">
+      <button class="btn btn--peque" type="submit">Guardar</button>
+    </form>
+
+    <form method="post" action="{{ url_for('operar_eliminar_auto') }}" class="form form--mini">
+      <input type="hidden" name="ticker" value="{{ r.ticker }}">
+      <input type="hidden" name="periodo" value="{{ periodo }}">
+      <button class="btn btn--peque btn--peligro" type="submit">Eliminar</button>
+    </form>
+  </div>
+
+  <div class="celda">
+    <form method="post" action="{{ url_for('operar_comprar') }}" class="form form--mini">
+      <input type="hidden" name="ticker" value="{{ r.ticker }}">
+      <input type="hidden" name="periodo" value="{{ periodo }}">
+      <input name="cantidad" type="number" min="1" value="1">
+      <button class="btn btn--principal btn--peque" type="submit">Comprar</button>
+    </form>
+
+    <form method="post" action="{{ url_for('operar_vender') }}" class="form form--mini">
+      <input type="hidden" name="ticker" value="{{ r.ticker }}">
+      <input type="hidden" name="periodo" value="{{ periodo }}">
+      <input name="cantidad" type="number" min="1" value="1">
+      <button class="btn btn--peque" type="submit">Vender</button>
+    </form>
+  </div>
+</div>

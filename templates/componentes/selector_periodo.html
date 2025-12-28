@@ -1,0 +1,20 @@
+<section class="tarjeta">
+  <h2>Periodo</h2>
+
+  <div class="fila-botones">
+    {% for p in periodos %}
+      {% if p == periodo %}
+        <span class="chip chip--activo">{{ p }}</span>
+      {% else %}
+        <a class="chip" href="{{ url_for('valores', periodo=p, refresco=refresco_seg) }}">{{ p }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <form method="get" action="{{ url_for('valores') }}" class="form form--inline">
+    <input type="hidden" name="periodo" value="{{ periodo }}">
+    <label for="refresco">Refresco (seg)</label>
+    <input id="refresco" name="refresco" type="number" min="30" value="{{ refresco_seg }}">
+    <button class="btn" type="submit">Aplicar</button>
+  </form>
+</section>

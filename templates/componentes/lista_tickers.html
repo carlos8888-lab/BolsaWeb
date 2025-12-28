@@ -1,0 +1,19 @@
+<section class="tarjeta">
+  <h2>Tickers</h2>
+
+  <div class="tabla">
+    <div class="tabla__cabecera">
+      <div>Empresa / Ticker</div>
+      <div>Mini-gráfica</div>
+      <div>Precio</div>
+      <div>Acciones</div>
+      <div>PnL</div>
+      <div>TP/SL</div>
+      <div>Operar</div>
+    </div>
+
+    {% for r in registros %}
+      {% include "componentes/fila_ticker.html" %}
+    {% endfor %}
+  </div>
+</section>

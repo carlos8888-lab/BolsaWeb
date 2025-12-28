@@ -1,0 +1,20 @@
+{% extends "componentes/layout_base.html" %}
+{% set titulo = "Login" %}
+
+{% block contenido %}
+  <section class="tarjeta">
+    <h1>Login</h1>
+    <p class="muted">Acceso por <b>usuario_id</b> desde la BBDD.</p>
+
+    <form method="post" action="{{ url_for('login_post') }}" class="form">
+      <label for="usuario_id">Usuario ID</label>
+      <input id="usuario_id" name="usuario_id" type="number" min="1" required>
+
+      <button type="submit" class="btn btn--principal">Entrar</button>
+    </form>
+
+    <p class="muted">
+      Nota: sin contraseñas (tu esquema actual de BBDD es <code>user(id, username, saldo)</code>).
+    </p>
+  </section>
+{% endblock %}
