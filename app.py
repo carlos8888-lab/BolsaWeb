@@ -37,7 +37,7 @@ RUTA_RESULTADOS = "resultados.json"
 RUTA_LAST_CHECK = "last_check.json"
 RUTA_MARKET_REFRESH = "market_refresh.json"  # NUEVO: controla TTL de refresh
 
-CLAVE_SESION = os.environ.get("SECRET_KEY", "cambia-esto-por-una-clave-segura")
+CLAVE_SESION = os.environ["SECRET_KEY"] # CLAVE_SESION = os.environ.get("SECRET_KEY", "cambia-esto-por-una-clave-segura")
 COMISION_POR_OPERACION = 10.0
 
 # TTL para no bajar datos todo el rato (en Railway te salva los tests)
