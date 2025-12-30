@@ -152,7 +152,7 @@ class RepositorioDB:
     def leer_tickers(self, conn: sqlite3.Connection) -> List[Tuple[str, str]]:
         cur = conn.cursor()
         # cur.execute("SELECT empresa, ticker FROM tickers")
-        cur.execute("SELECT empresa, ticker FROM tickers where ticker='san'")
+        cur.execute("SELECT empresa, ticker FROM tickers where ticker='SAN'")
         return [(str(r[0]), str(r[1])) for r in cur.fetchall()]
 
     # ---- posiciones ----
