@@ -2,18 +2,19 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple, Union
 
-import pandas as pd
-import yfinance as yf
 import matplotlib
 matplotlib.use("Agg")  # servidor sin UI
 import matplotlib.pyplot as plt
-import os
+import pandas as pd
+import yfinance as yf
 
 from flask import (
     Flask,
@@ -34,9 +35,13 @@ from flask import (
 RUTA_DB = "database.db"
 RUTA_RESULTADOS = "resultados.json"
 RUTA_LAST_CHECK = "last_check.json"
+RUTA_MARKET_REFRESH = "market_refresh.json"  # NUEVO: controla TTL de refresh
 
-CLAVE_SESION = "cambia-esto-por-una-clave-segura"
+CLAVE_SESION = os.environ.get("SECRET_KEY", "cambia-esto-por-una-clave-segura")
 COMISION_POR_OPERACION = 10.0
+
+# TTL para no bajar datos todo el rato (en Railway te salva los tests)
+MARKET_REFRESH_TTL_SECONDS = int(os.environ.get("MARKET_TTL_SECONDS", "900"))  # 15 min por defecto
 
 # Mapeo de periodos (siguiendo tu estructura)
 INTERVALO_PERIODO = [
@@ -46,7 +51,9 @@ INTERVALO_PERIODO = [
     ["MAX", "max", "1d"],   # toda la vida, 1d
 ]
 
-TODOS_LOS_DATOS=[]
+TODOS_LOS_DATOS = []
+
+
 # =========================
 # Tipos / utilidades
 # =========================
@@ -56,6 +63,7 @@ TickerInput = Union[
     Tuple[str, str],           # ("Banco Santander", "SAN")
     Dict[str, str],            # {"empresa": "...", "ticker": "SAN"}
 ]
+
 
 @dataclass(frozen=True)
 class RegistroTickerUI:
@@ -143,7 +151,8 @@ class RepositorioDB:
     # ---- tickers ----
     def leer_tickers(self, conn: sqlite3.Connection) -> List[Tuple[str, str]]:
         cur = conn.cursor()
-        cur.execute("SELECT empresa, ticker FROM tickers")
+        # cur.execute("SELECT empresa, ticker FROM tickers")
+        cur.execute("SELECT empresa, ticker FROM tickers where ticker='san'")
         return [(str(r[0]), str(r[1])) for r in cur.fetchall()]
 
     # ---- posiciones ----
@@ -182,9 +191,6 @@ class RepositorioDB:
         precio_venta: float,
         metodo: str = "LIFO",
     ) -> None:
-        """
-        Cierra compras abiertas y hace split si venta parcial.
-        """
         cantidad_vender = int(cantidad_vender)
         if cantidad_vender <= 0:
             return
@@ -255,9 +261,6 @@ class RepositorioDB:
             raise ValueError(f"No hay suficientes compras abiertas para vender {cantidad_vender}. Faltan {restante}.")
 
     def db_coste_medio_posicion(self, conn: sqlite3.Connection, usuario_id: int, ticker: str) -> float:
-        """
-        Coste medio ponderado + comisión en compras.
-        """
         cur = conn.cursor()
         cur.execute(
             """
@@ -282,7 +285,7 @@ class RepositorioDB:
             elif p_venta is not None and f_venta:
                 movimientos.append(("SELL", str(f_venta), cantidad, float(p_venta)))
 
-        movimientos.sort(key=lambda x: x[1])  # ISO ordena como string
+        movimientos.sort(key=lambda x: x[1])
 
         shares = 0
         avg_cost = 0.0
@@ -300,7 +303,6 @@ class RepositorioDB:
 
         return float(avg_cost)
 
-    # ---- TP/SL en compra activa ----
     def db_get_auto_venta_compra_activa(self, conn: sqlite3.Connection, usuario_id: int, ticker: str) -> Tuple[Optional[float], Optional[float]]:
         cur = conn.cursor()
         cur.execute(
@@ -352,7 +354,7 @@ class RepositorioDB:
 
 
 # =========================
-# Capa de mercado / datos (yfinance + cache)
+# Mercado / datos (yfinance + cache + TTL)
 # =========================
 
 class ServicioMercado:
@@ -380,6 +382,10 @@ class ServicioMercado:
         return out
 
     def descargar_datos_tickers(self, tickers_db: List[Tuple[str, str]]) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """
+        IMPORTANTE (Railway): esto puede fallar por rate limit / red.
+        Esta función NO debe romper la app: devolvemos lo que podamos.
+        """
         tickers = self._extraer_tickers(tickers_db)
         resultados: Dict[str, Dict[str, pd.DataFrame]] = {}
 
@@ -390,12 +396,19 @@ class ServicioMercado:
                 yf_period = periodo[1]
                 intervalo = periodo[2]
 
-                t = yf.Ticker(tick + ".MC")
-                df = t.history(period=yf_period, interval=intervalo)
-                df = None
-                if df is None or df.empty:
+                try:
+                    t = yf.Ticker(tick + ".MC")
+                    df = t.history(period=yf_period, interval=intervalo)
+
+                    # ✅ FIX: antes estabas haciendo df = None siempre
+                    if df is None or df.empty:
+                        continue
+
+                    resultados[tick][clave_periodo] = df.sort_index().copy()
+
+                except Exception:
+                    # fail-open: si un ticker/periodo falla, seguimos con el resto
                     continue
-                resultados[tick][clave_periodo] = df.sort_index().copy()
 
         return resultados
 
@@ -416,14 +429,14 @@ class ServicioMercado:
 
     def cargar_datos_desde_disco(self) -> Dict[str, Dict[str, pd.DataFrame]]:
         global TODOS_LOS_DATOS
-        if TODOS_LOS_DATOS==[]:
+        if TODOS_LOS_DATOS == []:
             data = leer_json(self.ruta_resultados)
             resultados: Dict[str, Dict[str, pd.DataFrame]] = {}
 
             for ticker, data_por_periodo in data.items():
                 resultados[ticker] = {}
                 for periodo, registros in data_por_periodo.items():
-                    df = pd.DataFrame(registros) #df = pd.DataFrame(registros)# QUITADO POR TIEMPOS
+                    df = pd.DataFrame(registros)
 
                     if "Datetime" not in df.columns:
                         for col in ("Date", "index"):
@@ -434,11 +447,15 @@ class ServicioMercado:
                     df["Datetime"] = pd.to_datetime(df["Datetime"], errors="coerce")
                     df = df.set_index("Datetime")
                     resultados[ticker][periodo] = df
-                    TODOS_LOS_DATOS=resultados
+
+            TODOS_LOS_DATOS = resultados
 
         return TODOS_LOS_DATOS
 
     def obtener_precio_tiempo_real(self, ticker: str, intervalo: str = "1m") -> Optional[float]:
+        """
+        Para operar: no debe tirar la app si Yahoo falla.
+        """
         try:
             t = yf.Ticker(ticker + ".MC")
             df = t.history(period="1d", interval=intervalo)
@@ -459,85 +476,6 @@ class ServicioMercado:
         if not isinstance(data_por_periodo, dict):
             return None
         return data_por_periodo.get(periodo)
-
-
-# =========================
-# Lógica de ventas automáticas (TP/SL)
-# =========================
-
-class ServicioAutoVenta:
-    def __init__(self, ruta_last_check: str, mercado: ServicioMercado, repo: RepositorioDB):
-        self.ruta_last_check = ruta_last_check
-        self.mercado = mercado
-        self.repo = repo
-
-    def leer_last_check(self) -> Optional[str]:
-        data = leer_json(self.ruta_last_check)
-        return data.get("last_check")
-
-    def guardar_last_check(self, ts_iso: str) -> None:
-        guardar_json(self.ruta_last_check, {"last_check": ts_iso})
-
-    def comprobar_ventas_automaticas(self, conn: sqlite3.Connection, usuario_id: int, portfolio: Dict[str, int]) -> None:
-        last = self.leer_last_check()
-        ahora = ahora_iso()
-
-        if not last:
-            self.guardar_last_check(ahora)
-            return
-
-        dt_last = pd.to_datetime(last, errors="coerce")
-
-        for ticker, qty in list(portfolio.items()):
-            qty = int(qty)
-            if qty <= 0:
-                continue
-
-            sup, inf = self.repo.db_get_auto_venta_compra_activa(conn, usuario_id, ticker)
-            if sup is None and inf is None:
-                continue
-
-            t = yf.Ticker(ticker + ".MC")
-            df = t.history(period="5d", interval="5m")
-            if df is None or df.empty:
-                continue
-            df = df.sort_index()
-
-            if pd.notna(dt_last):
-                df = df[df.index >= dt_last]
-            if df.empty:
-                continue
-
-            high = float(df["High"].max()) if "High" in df.columns else None
-            low = float(df["Low"].min()) if "Low" in df.columns else None
-
-            disparar = False
-            if sup is not None and high is not None and high >= float(sup):
-                disparar = True
-            if inf is not None and low is not None and low <= float(inf):
-                disparar = True
-
-            if not disparar:
-                continue
-
-            precio_rt = self.mercado.obtener_precio_tiempo_real(ticker, intervalo="1m")
-            if precio_rt is None:
-                continue
-
-            cash = self.repo.db_get_saldo(conn, usuario_id)
-            ingreso = precio_rt * qty - COMISION_POR_OPERACION
-            cash += ingreso
-            self.repo.db_set_saldo(conn, usuario_id, cash)
-
-            self.repo.db_set_posicion(conn, ticker, 0)
-            self.repo.db_cerrar_compras(conn, usuario_id, ticker, qty, precio_rt)
-
-            self.repo.db_clear_auto_venta_compra_activa(conn, usuario_id, ticker)
-
-            conn.commit()
-            portfolio[ticker] = 0
-
-        self.guardar_last_check(ahora)
 
 
 # =========================
@@ -567,6 +505,29 @@ class ServicioGraficas:
 
 
 # =========================
+# Helpers TTL refresh (NUEVO)
+# =========================
+
+def _leer_market_refresh_ts() -> Optional[float]:
+    data = leer_json(RUTA_MARKET_REFRESH)
+    try:
+        return float(data.get("ts", 0.0)) or None
+    except Exception:
+        return None
+
+
+def _guardar_market_refresh_ts(ts: float) -> None:
+    guardar_json(RUTA_MARKET_REFRESH, {"ts": ts})
+
+
+def _ha_expirado_market_cache(ttl_seconds: int) -> bool:
+    ts = _leer_market_refresh_ts()
+    if not ts:
+        return True
+    return (time.time() - ts) > ttl_seconds
+
+
+# =========================
 # App Flask
 # =========================
 
@@ -576,8 +537,12 @@ def create_app() -> Flask:
 
     repo = RepositorioDB(RUTA_DB)
     mercado = ServicioMercado(RUTA_RESULTADOS)
-    auto_venta = ServicioAutoVenta(RUTA_LAST_CHECK, mercado, repo)
     graficas = ServicioGraficas()
+
+    # ✅ Healthcheck rápido (Railway tests)
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok"}, 200
 
     def usuario_id_actual() -> Optional[int]:
         uid = session.get("usuario_id")
@@ -592,19 +557,44 @@ def create_app() -> Flask:
         return None
 
     def cargar_datos_mercado(conn: sqlite3.Connection) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """
+        ✅ Estrategia Railway-friendly:
+        - Si hay cache en disco y NO ha expirado -> úsala
+        - Si expira -> intenta refrescar
+        - Si refresco falla -> vuelve a cache y NO rompas la página
+        """
         tickers_db = repo.leer_tickers(conn)
-        if existe_archivo(RUTA_RESULTADOS):
+
+        # 1) Si hay cache y está fresca, la devolvemos
+        if existe_archivo(RUTA_RESULTADOS) and not _ha_expirado_market_cache(MARKET_REFRESH_TTL_SECONDS):
             datos = mercado.cargar_datos_desde_disco()
             if datos:
-                tickers_en_cache = set(datos.keys())
-                tickers_db_set = set([t for _, t in tickers_db])
-                if tickers_db_set != tickers_en_cache:
-                    datos = mercado.descargar_datos_tickers(tickers_db)
-                    mercado.guardar_datos_en_disco(datos)
                 return datos
-        datos = mercado.descargar_datos_tickers(tickers_db)
-        mercado.guardar_datos_en_disco(datos)
-        return datos
+
+        # 2) Si hay cache aunque esté vieja, la cargamos como fallback
+        fallback = {}
+        if existe_archivo(RUTA_RESULTADOS):
+            try:
+                fallback = mercado.cargar_datos_desde_disco() or {}
+            except Exception:
+                fallback = {}
+
+        # 3) Intentar refrescar (puede fallar por yfinance)
+        try:
+            datos_nuevos = mercado.descargar_datos_tickers(tickers_db)
+            if datos_nuevos:
+                mercado.guardar_datos_en_disco(datos_nuevos)
+                _guardar_market_refresh_ts(time.time())
+                return datos_nuevos
+        except Exception:
+            pass
+
+        # 4) Fail-open: si no se pudo refrescar, devolvemos lo que haya
+        if fallback:
+            return fallback
+
+        # 5) Último recurso: vacío
+        return {}
 
     # =========================
     # Rutas: páginas
@@ -616,7 +606,6 @@ def create_app() -> Flask:
         if uid is None:
             return redirect(url_for("login"))
         return redirect(url_for("valores"))
- 
 
     @app.get("/app")
     def app_home():
@@ -682,8 +671,6 @@ def create_app() -> Flask:
             datos = cargar_datos_mercado(conn)
 
             portfolio = repo.db_get_posiciones(conn)
-            # auto_venta.comprobar_ventas_automaticas(conn, uid, portfolio)
-
             usuario_nombre, cash = repo.db_get_usuario(conn, uid)
 
             registros: List[RegistroTickerUI] = []
@@ -702,6 +689,7 @@ def create_app() -> Flask:
                     coste_medio = repo.db_coste_medio_posicion(conn, uid, ticker)
                     beneficio = (precio_actual - coste_medio) * acciones
 
+                # (TP/SL siguen igual)
                 tp, sl = repo.db_get_auto_venta_compra_activa(conn, uid, ticker)
 
                 registros.append(
@@ -780,7 +768,7 @@ def create_app() -> Flask:
 
         precio = _obtener_precio_operacion()
         if precio is None:
-            flash("No se pudo obtener precio en tiempo real.", "error")
+            flash("No se pudo obtener precio en tiempo real (Yahoo). Prueba más tarde.", "error")
             return redirect(url_for("valores", periodo=periodo))
 
         conn = repo.conectar()
@@ -826,7 +814,7 @@ def create_app() -> Flask:
 
         precio = _obtener_precio_operacion()
         if precio is None:
-            flash("No se pudo obtener precio en tiempo real.", "error")
+            flash("No se pudo obtener precio en tiempo real (Yahoo). Prueba más tarde.", "error")
             return redirect(url_for("valores", periodo=periodo))
 
         conn = repo.conectar()
@@ -873,7 +861,10 @@ def create_app() -> Flask:
         try:
             repo.db_set_auto_venta_compra_activa(conn, uid, ticker, tp, sl)
             conn.commit()
-            flash(f"Auto-venta actualizada para {ticker} (TP={tp if tp is not None else '--'} / SL={sl if sl is not None else '--'}).", "ok")
+            flash(
+                f"Auto-venta actualizada para {ticker} (TP={tp if tp is not None else '--'} / SL={sl if sl is not None else '--'}).",
+                "ok",
+            )
             return redirect(url_for("valores", periodo=periodo))
         finally:
             conn.close()
@@ -940,11 +931,8 @@ def create_app() -> Flask:
     return app
 
 
-# if __name__ == "__main__":
-#     app = crear_app()
-#     app.run(debug=True)
 app = create_app()
+
 if __name__ == "__main__":
     puerto = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=puerto, debug=False)
-    # app.run(host="0.0.0.0", port=puerto, debug=True)
